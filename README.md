@@ -1,5 +1,3 @@
-Certainly! Below is a template for a README file for your React application. This README file includes information on setting up the project, fetching data, and other relevant details.
-
 
 # Crime Data Visualization React App
 
