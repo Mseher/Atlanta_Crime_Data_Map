@@ -1,6 +1,6 @@
 Certainly! Below is a template for a README file for your React application. This README file includes information on setting up the project, fetching data, and other relevant details.
 
-```markdown
+
 # Crime Data Visualization React App
 
 This is a React application for visualizing crime data in Atlanta using the Leaflet library. The application fetches data from the Atlanta crime data website in GeoJSON format and displays it on an interactive map.
