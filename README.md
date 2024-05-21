@@ -83,7 +83,7 @@ crime-data-visualization/
 └── ...
 ```
 
-- **`src/components/GulfOfMexicoMap.js`**: Main component that renders the map and handles data fetching and filtering.
+- **`src/components/AtlantaMap.js`**: Main component that renders the map and handles data fetching and filtering.
 - **`src/map.css`**: Styles for the map and its controls.
 - **`public/index.html`**: The HTML file that contains the root div for the React app.
 - **`src/App.js`**: Main application component.
