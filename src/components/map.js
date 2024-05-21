@@ -50,7 +50,6 @@ const AtlantaMap = () => {
             feature.properties.nibrs_code_name
           )
         );
-        setCrimeData({ type: "FeatureCollection", features: relevantFeatures });
         applyFilter(relevantFeatures, filter);
       } catch (error) {
         console.error("Error fetching crime data:", error);
