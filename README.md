@@ -15,7 +15,7 @@ This is a React application for visualizing crime data in Atlanta using the Leaf
 
 ## Live Demo
 
-You can view a live demo of the application [here](your-live-demo-link).
+You can view a live demo of the application [here](https://atlantacrimedata.netlify.app).
 
 ## Prerequisites
 
