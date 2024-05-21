@@ -150,7 +150,7 @@ const AtlantaMap = () => {
       // Clean up
       mapInstance.remove();
     };
-  }, []);
+  }, [filter]);
 
   useEffect(() => {
     if (map && filteredData.length > 0) {
