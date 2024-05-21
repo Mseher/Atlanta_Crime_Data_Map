@@ -28,7 +28,7 @@ Make sure you have the following installed:
 
 1. **Clone the repository:**
    ```sh
-   git clone https://github.com/your-username/crime-data-visualization.git
+   git clone https://github.com/Mseher/Atlanta_Crime_Data_Map.git
    cd crime-data-visualization
    ```
 
