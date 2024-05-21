@@ -4,7 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { Row, Col, Form } from "react-bootstrap";
 import "./map.css";
 
-const GulfOfMexicoMap = () => {
+const AtlantaMap = () => {
   const [map, setMap] = useState(null);
   const [crimeData, setCrimeData] = useState({ features: [] });
   const [filteredData, setFilteredData] = useState([]);
@@ -216,4 +216,4 @@ const GulfOfMexicoMap = () => {
   );
 };
 
-export default GulfOfMexicoMap;
+export default AtlantaMap;
