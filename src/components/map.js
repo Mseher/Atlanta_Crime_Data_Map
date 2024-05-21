@@ -66,6 +66,7 @@ const AtlantaMap = () => {
     };
 
     fetchCrimeData(filter);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
   useEffect(() => {
@@ -138,7 +139,7 @@ const AtlantaMap = () => {
       // Clean up
       mapInstance.remove();
     };
-  }, [filter, nibrsCodeNames]);
+  }, [filter]);
 
   useEffect(() => {
     if (map && filteredData.length > 0) {
