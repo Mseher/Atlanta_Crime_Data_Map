@@ -1,79 +1,146 @@
 import React, { useEffect, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import data from "../data/desalination.json"; // Import JSON data
-import stateData from "../data/states.json";
-import countiesData from "../data/CountiesData.json";
-import counties from "../data/filteredcounties.json";
-import markerPlanned from "../assets/planned.png";
-import markerUnderConstruction from "../assets/construction.png";
-import markerOperational from "../assets/online.png";
 import { Row, Col, Form } from "react-bootstrap";
-
 import "./map.css";
 
 const GulfOfMexicoMap = () => {
-  const [showPlanned, setShowPlanned] = useState(true);
-  const [showUnderConstruction, setShowUnderConstruction] = useState(true);
-  const [showOperational, setShowOperational] = useState(true);
-
-  const [showEnergyInfrastructure, setShowEnergyInfrastructure] =
-    useState(false);
-
-  const [showStateData, setShowStateData] = useState(false);
-  const [showCountyData, setShowCountyData] = useState(false);
-  const [stateLayer, setStateLayer] = useState(null);
-  const [countyLayer, setCountyLayer] = useState(null);
   const [map, setMap] = useState(null);
+  const [crimeData, setCrimeData] = useState({ features: [] });
+  const [filteredData, setFilteredData] = useState([]);
+  const [filter, setFilter] = useState("Today");
+  const batchSize = 2000; // Adjust the batch size as needed
 
-  const handleDesalinationCheckboxChange = (checked) => {
-    // If any of the desalination checkboxes are checked, uncheck the energy infrastructure checkbox
-    setShowEnergyInfrastructure(false);
-  };
+  useEffect(() => {
+    const fetchTotalCount = async () => {
+      try {
+        const response = await fetch(
+          "https://services3.arcgis.com/Et5Qfajgiyosiw4d/arcgis/rest/services/CrimeDataExport_2_view/FeatureServer/1/query?where=1+%3D+1&returnCountOnly=true&f=json"
+        );
+        const data = await response.json();
+        return data.count;
+      } catch (error) {
+        console.error("Error fetching total count:", error);
+        return 0;
+      }
+    };
 
-  const handleEnergyInfrastructureCheckbox = (checked) => {
-    if (checked) {
-      // If energy infrastructure checkbox is checked, uncheck the other checkboxes
-      setShowPlanned(false);
-      setShowUnderConstruction(false);
-      setShowOperational(false);
-      setShowStateData(false);
-      setShowCountyData(false);
+    const fetchCrimeDataBatch = async (offset) => {
+      try {
+        const response = await fetch(
+          `https://services3.arcgis.com/Et5Qfajgiyosiw4d/arcgis/rest/services/CrimeDataExport_2_view/FeatureServer/1/query?where=1+%3D+1&outFields=*&returnGeometry=true&orderByFields=OBJECTID&resultOffset=${offset}&resultRecordCount=${batchSize}&f=pgeojson`
+        );
+        const data = await response.json();
+        return data.features;
+      } catch (error) {
+        console.error("Error fetching crime data batch:", error);
+        return [];
+      }
+    };
+
+    const fetchCrimeData = async () => {
+      try {
+        const totalCount = await fetchTotalCount();
+        let allFeatures = [];
+        for (let offset = 0; offset < totalCount; offset += batchSize) {
+          const features = await fetchCrimeDataBatch(offset);
+          allFeatures = [...allFeatures, ...features];
+        }
+        const relevantFeatures = allFeatures.filter((feature) =>
+          ["Motor Vehicle Theft", "Theft From Motor Vehicle", "Theft of Motor Vehicle Parts or Accessories"].includes(
+            feature.properties.nibrs_code_name
+          )
+        );
+        setCrimeData({ type: "FeatureCollection", features: relevantFeatures });
+        applyFilter(relevantFeatures, filter);
+      } catch (error) {
+        console.error("Error fetching crime data:", error);
+      }
+    };
+
+    fetchCrimeData();
+  }, [filter]);
+
+  const applyFilter = (data, filter) => {
+    const now = new Date();
+    let startTime;
+
+    switch (filter) {
+      case "Today":
+        startTime = new Date(now.setHours(0, 0, 0, 0)).getTime();
+        break;
+      case "Week":
+        startTime = new Date(now.setDate(now.getDate() - 7)).getTime();
+        break;
+      case "Month":
+        startTime = new Date(now.setDate(now.getDate() - 30)).getTime();
+        break;
+      case "3 Months":
+        startTime = new Date(now.setDate(now.getDate() - 90)).getTime();
+        break;
+      default:
+        startTime = new Date(now.setHours(0, 0, 0, 0)).getTime();
     }
-    setShowEnergyInfrastructure(checked);
-  };
-  const handleStateDataCheckbox = (checked) => {
-    if (checked) {
-      // If energy state checkbox is checked, uncheck the other checkboxes
 
-      setShowEnergyInfrastructure(false);
-      setShowCountyData(false);
-    }
-    setShowStateData(checked);
-  };
-  const handleCountyDataCheckbox = (checked) => {
-    if (checked) {
-      // If energy state checkbox is checked, uncheck the other checkboxes
-
-      setShowEnergyInfrastructure(false);
-      setShowStateData(false);
-    }
-    setShowCountyData(checked);
+    const filteredFeatures = data.filter((feature) => {
+      const reportDate = feature.properties.report_Date;
+      return reportDate >= startTime && reportDate <= Date.now();
+    });
+    setFilteredData(filteredFeatures);
   };
 
   useEffect(() => {
-    const mapInstance = L.map("map").setView([27.994402, -90.502335], 6);
+    const mapInstance = L.map("map").setView([33.7490, -84.3880], 12); // Centering the map on Atlanta with a zoom level of 12
 
-    L.tileLayer(
-      "https://api.mapbox.com/styles/v1/mapbox/light-v10/tiles/{z}/{x}/{y}?access_token=pk.eyJ1Ijoib2dlaWQzMDAwIiwiYSI6ImNsdDU4Z2hxZzBiNTIyam83bG85ZHU1bmUifQ.bJcmSX0j4Jk6AvKC9dUFUA",
-      {
-        maxZoom: 18,
-        attribution:
-          'Map data &copy; <a href="https://www.mapbox.com/">Mapbox</a> contributors, Imagery &copy; <a href="https://www.mapbox.com/">Mapbox</a>',
-        tileSize: 512,
-        zoomOffset: -1,
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      maxZoom: 19,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(mapInstance);
+
+    // Add legend
+    const legend = L.control({ position: "bottomright" });
+
+    legend.onAdd = function () {
+      const div = L.DomUtil.create("div", "legend");
+      const categories = ["Motor Vehicle Theft", "Theft From Motor Vehicle", "Theft of Motor Vehicle Parts or Accessories"];
+      const colors = ["red", "black", "blue"];
+
+      let legendHtml = "";
+      for (let i = 0; i < categories.length; i++) {
+        legendHtml +=
+          '<div class="legend-item"><i class="fas fa-map-marker-alt" style="color:' +
+          colors[i] +
+          '"></i> ' +
+          categories[i] +
+          "</div>";
       }
-    ).addTo(mapInstance);
+      div.innerHTML = legendHtml;
+      return div;
+    };
+
+    legend.addTo(mapInstance);
+
+    const filterControl = L.control({ position: "topright" });
+
+    filterControl.onAdd = function (map) {
+      const div = L.DomUtil.create("div", "filter-control");
+      div.innerHTML = `
+        <label for="filterSelect">Filter by Date</label>
+        <select id="filterSelect" class="form-control">
+          <option value="Today">Today</option>
+          <option value="Week">Last Week</option>
+          <option value="Month">Last Month</option>
+          <option value="3 Months">Last 3 Months</option>
+        </select>
+      `;
+      L.DomEvent.on(div, 'change', (e) => {
+        setFilter(e.target.value);
+      });
+      return div;
+    };
+
+    filterControl.addTo(mapInstance);
 
     setMap(mapInstance);
 
@@ -83,688 +150,65 @@ const GulfOfMexicoMap = () => {
     };
   }, []);
 
-  // New useEffect to conditionally render base map when showEnergyInfrastructure is false
-  // useEffect(() => {
-  //   if (!map) return;
-
-  //   const baseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  //     attribution: 'Map data © <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
-  //     maxZoom: 18,
-  //   });
-
-  //   // Remove existing base map layer if it exists
-  //   map.eachLayer((layer) => {
-  //     if (layer._url === "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png") {
-  //       map.removeLayer(layer);
-  //     }
-  //   });
-
-  //   // Add or remove base map layer based on showEnergyInfrastructure
-  //   if (!showEnergyInfrastructure) {
-  //     baseLayer.addTo(map);
-  //   }
-
-  //   return () => {
-  //     // Clean up by removing base map layer when component unmounts
-  //     map.removeLayer(baseLayer);
-  //   };
-  // }, [showEnergyInfrastructure, map]);
-
   useEffect(() => {
-    if (!map) return;
+    if (map && filteredData.length > 0) {
+      console.log("Rendering Markers:", filteredData); // Debug log for filtered data to be rendered
 
-    //Desalination Markers
-    const markers = [];
-    // Function to get marker icon based on status and size
-    function getMarkerIcon(status, size) {
-      let iconUrl;
-      let iconSize;
-      switch (status) {
-        case "Planned":
-          iconUrl = markerPlanned;
-          break;
-        case "Under Construction":
-          iconUrl = markerUnderConstruction;
-          break;
-        case "Operational":
-          iconUrl = markerOperational;
-          break;
-        default:
-          iconUrl = null;
-          break;
-      }
-
-      // Set icon size based on the "Size" field
-      switch (size) {
-        case "XL":
-          iconSize = [40, 40]; // Adjust the size as needed
-          break;
-        case "L":
-          iconSize = [32, 32]; // Adjust the size as needed
-          break;
-        case "M":
-          iconSize = [24, 24]; // Adjust the size as needed
-          break;
-        default:
-          // Default size if not specified or invalid
-          iconSize = [32, 32];
-          break;
-      }
-
-      if (iconUrl) {
-        return L.icon({
-          iconUrl,
-          iconSize,
-        });
-      } else {
-        return null;
-      }
-    }
-
-    function generatePopupContent(projectName, otherFields, source) {
-      const popupContent = document.createElement("div");
-      popupContent.style.maxWidth = "100%"; // Ensure the popup does not exceed the screen width
-
-      popupContent.innerHTML = `
-      <div class="popup-header">${projectName}</div>
-      <div class="popup-body">
-          <table class="details-table">
-              ${Object.entries(otherFields)
-                .reduce((rows, [fieldName, fieldValue], index) => {
-                  if (index % 2 === 0 || fieldName === "Latest Updates")
-                    rows.push([]); // Start a new row every two entries
-                  const contentId = `${fieldName}_content_${Date.now()}_${Math.random()
-                    .toString(36)
-                    .substr(2, 9)}`;
-                  const fieldHTML =
-                    fieldValue.length > 120
-                      ? `
-                          <span id="${contentId}_short">${fieldValue.substring(
-                          0,
-                          50
-                        )}...</span>
-                          <span id="${contentId}_full" class="full-content">${fieldValue}</span>
-                          <a href="#" class="read-more-link" data-id="${contentId}">Read More</a>
-                      `
-                      : `${fieldValue}`;
-                  if (fieldName === "Latest Updates") {
-                    rows[rows.length - 1].push(
-                      `<tr><td  class="field-name">${fieldName}</td><td colspan="3" class="field-value">${fieldHTML}</td></tr>`
-                    );
-                  } else {
-                    rows[rows.length - 1].push(
-                      `<td class="field-name">${fieldName}</td><td class="field-value">${fieldHTML}</td>`
-                    );
-                  }
-
-                  return rows;
-                }, [])
-                .map((row) => `<tr>${row.join("")}</tr>`)
-                .join("")}
-          </table>
-      </div>
-      
-      <div>
-      
-  <button onclick="window.open('${source}', '_blank');" class="source-button">Source</button>
-</div>
-
-      `;
-
-      // Attach event listener for "Read More" links
-      popupContent.querySelectorAll(".read-more-link").forEach((link) => {
-        link.addEventListener("click", (e) => {
-          e.preventDefault();
-          const uniqueId = e.target.getAttribute("data-id");
-          const shortContent = document.getElementById(`${uniqueId}_short`);
-          const fullContent = document.getElementById(`${uniqueId}_full`);
-          const expanded = e.target.getAttribute("data-expanded") === "true";
-
-          if (expanded) {
-            shortContent.style.display = "inline";
-            fullContent.style.display = "none";
-            e.target.textContent = "Read More";
-            e.target.setAttribute("data-expanded", "false");
-          } else {
-            shortContent.style.display = "none";
-            fullContent.style.display = "inline";
-            e.target.textContent = "Read Less";
-            e.target.setAttribute("data-expanded", "true");
-          }
-        });
+      // Clear existing markers
+      map.eachLayer((layer) => {
+        if (layer instanceof L.Marker || layer instanceof L.GeoJSON) {
+          map.removeLayer(layer);
+        }
       });
 
-      return popupContent;
-    }
-
-    // Add markers from JSON data with custom icons
-    data.forEach((markerData) => {
-      const {
-        lat,
-        long,
-        "\ufeffProject Name": projectName,
-        Status: status,
-        Size: size,
-        Source: source,
-        ...otherFields
-      } = markerData; // Modify this line to access "lat" and "long"
-      if (lat && long) {
-        if (
-          (status === "Planned" && showPlanned) ||
-          (status === "Under Construction" && showUnderConstruction) ||
-          (status === "Operational" && showOperational)
-        ) {
-          const markerIcon = getMarkerIcon(status, size);
-          if (markerIcon) {
-            const marker = L.marker([parseFloat(lat), parseFloat(long)], {
-              icon: markerIcon,
-            }) // Modify this line to use "lat" and "long"
-              .addTo(map)
-              .bindPopup(
-                generatePopupContent(projectName, otherFields, source)
-              );
-            marker.markerData = { lat, long, status, size, ...otherFields }; // Store the entire markerData object as a property of the marker
-            markers.push(marker);
-          }
-        }
-      }
-    });
-
-    return () => {
-      // Clean up
-      markers.forEach((marker) => map.removeLayer(marker));
-    };
-  }, [map, showPlanned, showUnderConstruction, showOperational]);
-
-  useEffect(() => {
-    if (!map) return;
-
-    // Load GeoJSON layer
-    if (showStateData && !stateLayer) {
-      const layer = L.geoJson(stateData, {
+      // Add new markers
+      const crimeLayer = L.geoJSON({ type: "FeatureCollection", features: filteredData }, {
         onEachFeature: (feature, layer) => {
-          // Define mouseover event
-          layer.on("mouseover", (e) => {
-            // Change the color of the polygon to brown on hover
-            e.target.setStyle({
-              fillColor: "#006400",
-              color: "#006400",
-              weight: 2,
-            });
-          });
-          // Define mouseout event
-          layer.on("mouseout", (e) => {
-            // Reset the color of the polygon when not hovering
-            e.target.setStyle({
-              fillColor: "#90EE90", // Original color
-              color: "#006400",
-              weight: 2,
-            });
-          });
-
-          if (feature.properties && feature.properties.name) {
-            layer.bindPopup(generatePopupContent(feature).innerHTML);
+          if (feature.properties) {
+            const popupContent = `
+              <strong>Location:</strong> ${feature.properties.location}
+            `;
+            layer.bindPopup(popupContent);
           }
         },
-        style: {
-          // Define default styles for your polygons or based on feature properties
-          color: "#006400",
-          weight: 2,
-          opacity: 1,
-          fillColor: "#90EE90",
-          fillOpacity: 0.7,
-        },
-      }).addTo(map);
-      setStateLayer(layer);
-    } else if (!showStateData && stateLayer) {
-      // Remove GeoJSON layer if it exists and the checkbox is not checked
-      map.removeLayer(stateLayer);
-      setStateLayer(null);
-    }
-    function generatePopupContent(feature) {
-      const properties = feature.properties;
-
-      // Function to safely retrieve nested properties
-      const getNestedValue = (object, keys) =>
-        keys.reduce((o, k) => (o || {})[k], object);
-
-      // Create a function to format the number with commas for thousands
-      const formatNumber = (num) => num?.toLocaleString() || num;
-
-      const popupContent = document.createElement("div");
-      popupContent.style.maxWidth = "100%"; // Ensure the popup does not exceed the screen width
-      popupContent.innerHTML = `
-      <div class="popup-header" style=" width: 100%;">${properties.name}</div>
-      <br>
-      <div><strong>Population:</strong> ${formatNumber(
-        properties.Population
-      )}</div>
-      <div class="popup-body">
-        <table class="details-table" style="width: 100%; ">
-        <tr>
-            <!-- Electricity Data Column -->
-            <td style="vertical-align: top; width: 50%; padding-left: 0; padding-right: 5px;">
-                <table  >
-                    <tr><th colspan="2" style="padding-left: 0; padding-right: 5px;">Electricity Data</th></tr>
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">Production</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "ElectricityData",
-                        "Production",
-                        "MWh",
-                      ])
-                    )} MWh <br>${formatNumber(
-        getNestedValue(properties, [
-          "ElectricityData",
-          "Production",
-          "MWh per capita",
-        ])
-      )} MWh per capita</td></tr>
-                    
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">Consumption</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "ElectricityData",
-                        "Consumption",
-                        "MWh",
-                      ])
-                    )} MWh <br>${formatNumber(
-        getNestedValue(properties, [
-          "ElectricityData",
-          "Consumption",
-          "MWh per capita",
-        ])
-      )} MWh per capita</td></tr>
-                    
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">Renewable</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "ElectricityData",
-                        "Production from Renewable",
-                        "MWh",
-                      ])
-                    )} MWh <br>${formatNumber(
-        getNestedValue(properties, [
-          "ElectricityData",
-          "Production from Renewable",
-          "MWh per capita",
-        ])
-      )} MWh per capita</td></tr>
-                    
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">Non-Renewable</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "ElectricityData",
-                        "Production from Non-Renewable",
-                        "MWh",
-                      ])
-                    )} MWh <br>${formatNumber(
-        getNestedValue(properties, [
-          "ElectricityData",
-          "Production from Non-Renewable",
-          "MWh per capita",
-        ])
-      )} MWh per capita</td></tr>
-                    
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">CO2 Emissions</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "ElectricityData",
-                        "CO2 Emissions from Consumption",
-                        "kg",
-                      ])
-                    )} kg <br>${formatNumber(
-        getNestedValue(properties, [
-          "ElectricityData",
-          "CO2 Emissions from Consumption",
-          "kg per capita",
-        ])
-      )} kg per capita</td></tr>
-                    
-                    <tr><th colspan="2">Electricity Rate and Bills</th></tr>
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">Residential</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "ElectricityRateandBills",
-                        "Residential",
-                        "centskWh",
-                      ])
-                    )} cents/kWh </td></tr>
-                    <tr><td style="width: 50%; padding-left: 0; padding-right: 5px;">Ave. monthly Bill</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "ElectricityRateandBills",
-                        "Residential",
-                        "Ave. monthly Bill",
-                      ])
-                    )}</td></tr>
-                    
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">Commercial</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "ElectricityRateandBills",
-                        "Commercial",
-                        "centskWh",
-                      ])
-                    )} cents/kWh </td></tr>
-                    <tr><td style="width: 50%; padding-left: 0; padding-right: 5px;">Ave. monthly Bill</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "ElectricityRateandBills",
-                        "Commercial",
-                        "Ave. monthly Bill",
-                      ])
-                    )}</td></tr>
-                    
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">Industrial</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "ElectricityRateandBills",
-                        "Industrial",
-                        "centskWh",
-                      ])
-                    )} cents/kWh </td></tr>
-                    <tr><td style="width: 50%; padding-left: 0; padding-right: 5px;">Ave. monthly Bill</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "ElectricityRateandBills",
-                        "Industrial",
-                        "Ave. monthly Bill",
-                      ])
-                    )}</td></tr>
-                  </table>
-            </td>
-            <!-- Water Data Column -->
-            <td style="vertical-align: top; width: 50%; margin-left:2px">
-                <table >
-                    <tr><th colspan="2">Water Data</th></tr>
-                    <tr><td>Current Demand</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "WaterData",
-                        "Current Water Demand",
-                        "acre-feet/year",
-                      ])
-                    )} acre-feet/year</td></tr>
-                    <tr><td>In-State Supply</td><td>${formatNumber(
-                      getNestedValue(properties, [
-                        "WaterData",
-                        "In-State Supply ",
-                        "acre-feet/year",
-                      ])
-                    )} acre-feet/year</td></tr>
-                    
-                    <tr><th colspan="2">Water Usage by Type</th></tr>
-                    <tr><td>Municipal</td><td>${
-                      properties.WaterUsagebyType.Municipal
-                    }</td></tr>
-                    <tr><td>Irrigation</td><td>${
-                      properties.WaterUsagebyType.Irrigation
-                    }</td></tr>
-                    <tr><td>Livestock</td><td>${
-                      properties.WaterUsagebyType.Livestock
-                    }</td></tr>
-                    <tr><td>Industry</td><td>${
-                      properties.WaterUsagebyType.Industry
-                    }</td></tr>
-                    <tr><td>Electric Power</td><td>${
-                      properties.WaterUsagebyType.ElectricPower
-                    }</td></tr>
-
-
-                    <tr><th style="width: 50%;">Average Residential Monthly Water Bill</th><td>${
-                      properties.AverageResidentialMonthlyWaterBill
-                    }</td></tr>
-                    
-                </table>
-            </td>
-        </tr>
-    </table>
-      
-        
-      </div>
-    `;
-
-      return popupContent;
-    }
-
-    return () => {
-      // Clean up the GeoJSON layer when the component unmounts or the checkbox is unchecked
-      if (map && stateLayer) {
-        map.removeLayer(stateLayer);
-      }
-    };
-  }, [map, showStateData, stateLayer]);
-
-  useEffect(() => {
-    if (!map) return;
-
-    // Load GeoJSON layer
-    if (showCountyData && !countyLayer) {
-      const layer = L.geoJson(counties, {
-        onEachFeature: (feature, layer) => {
-          // Define mouseover event
-          layer.on("mouseover", (e) => {
-            // Change the color of the polygon to a shade of purple on hover
-            e.target.setStyle({
-              fillColor: "#4682B4",
-              color: "#4682B4",
-              weight: 2,
-            });
-
-            // Show county name tooltip on hover
-            layer
-              .bindTooltip(feature.properties.NAME, {
-                className: "county-tooltip",
-              })
-              .openTooltip();
-          });
-
-          // Define mouseout event
-          layer.on("mouseout", (e) => {
-            // Reset the color of the polygon to shades of orange when not hovering
-            e.target.setStyle({
-              fillColor: "#87CEEB", // Light blue
-              color: "#4682B4",
-              weight: 2,
-            });
-            layer.unbindTooltip();
-          });
-
-          if (
-            feature.properties &&
-            feature.properties.STATEFP &&
-            feature.properties.NAME
-          ) {
-            const stateFP = feature.properties.STATEFP;
-            const countyName = feature.properties.NAME;
-            const countyData = countiesData.find(
-              (data) =>
-                data.Counties.startsWith(countyName) && data.States === stateFP
-            );
-            if (countyData) {
-              const popupContent = generatePopupContent(countyData);
-              layer.bindPopup(popupContent);
-            }
+        pointToLayer: (feature, latlng) => {
+          let iconHtml;
+          switch (feature.properties.nibrs_code_name) {
+            case "Motor Vehicle Theft":
+              iconHtml = '<i class="fas fa-map-marker-alt" style="color: red; font-size: 1rem;"></i>';
+              break;
+            case "Theft From Motor Vehicle":
+              iconHtml = '<i class="fas fa-map-marker-alt" style="color: black; font-size: 1rem;"></i>';
+              break;
+            case "Theft of Motor Vehicle Parts or Accessories":
+              iconHtml = '<i class="fas fa-map-marker-alt" style="color: blue; font-size: 1rem;"></i>';
+              break;
+            default:
+              iconHtml = '<i class="fas fa-question-circle" style="color: blue; font-size: 1rem;"></i>';
           }
-        },
-        style: {
-          // Define default styles for your polygons or based on feature properties
-          color: "#4682B4",
-          weight: 2,
-          opacity: 1,
-          fillColor: "#87CEEB",
-          fillOpacity: 0.7,
+
+          const icon = L.divIcon({
+            html: iconHtml,
+            className: "custom-icon",
+            iconSize: [30, 30], // Adjust size if needed
+          });
+
+          return L.marker(latlng, { icon: icon });
         },
       }).addTo(map);
 
-      setCountyLayer(layer);
-    } else if (!showCountyData && countyLayer) {
-      // Remove GeoJSON layer if it exists and the checkbox is not checked
-      map.removeLayer(countyLayer);
-      setCountyLayer(null);
+      return () => {
+        map.removeLayer(crimeLayer);
+      };
     }
-    function generatePopupContent(countyData) {
-      const popupContent = document.createElement("div");
-      popupContent.style.maxWidth = "100%"; // Ensure the popup does not exceed the screen width
-
-      popupContent.innerHTML = `
-      <div class="popup-header" style=" width: 100%;">${countyData.Counties}</div>
-      <br>
-      <div><strong>Population:</strong> ${countyData.Population}</div>
-      <div class="popup-body">
-        <table class="details-table" style="width: 100%; ">
-        <tr>
-            <!-- Water Data Column -->
-            <td style="vertical-align: top; width: 50%; padding-left: 0; padding-right: 5px;">
-                <table  >
-                    <tr><th colspan="2" style="padding-left: 0; padding-right: 5px;">Water Data</th></tr>
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">Water Demand</td><td>${countyData["Water Demand acre-feet/year"]} acre-feet/year</td></tr>
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">Water Supply</td><td>${countyData["Water Suppy acre-feet/year"]} acre-feet/year</td></tr>
-                   
-                    <tr><th colspan="2" style="padding-left: 0; padding-right: 5px;">No. of Water Utilities</th></tr>
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">${countyData["No of Water Utilities"]}</td></tr>
-                    
-    
-                    <tr><th colspan="2">Avg. Water Rates</th></tr>
-                    <tr><td style="width: 50%; padding-left: 0; padding-right: 5px;">Monthly Base Rate</td><td>$${countyData["Monthly base rate"]}</td></tr>
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">Min per 1000 gal</td><td>$${countyData["min per 1000 gal"]}</td></tr>
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">Max per 1000 gal</td><td>$${countyData["max per 1000 gal"]}</td></tr>
-
-                  </table>
-            </td>
-            <!-- Electricity Data Column -->
-            <td style="vertical-align: top; width: 50%; margin-left:2px; padding-top:0;">
-                <table >
-                    <tr><th colspan="2" >Electricity Provider/Utilities</th></tr>
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">${countyData["Electricity Providers"]} </td></tr>
-                    
-                    
-
-                    <tr><th colspan="2">Power Plants</th></tr>
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">${countyData["Plants"]}</td></tr>
-
-                    
-                    <tr><th colspan="2">Avg Residential Rate</th></tr>
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">${countyData["Residential Rate (¢)"]}/kWh</td></tr>
-                    
-
-                    <tr><th colspan="2">Residential Avg. Electric Bill</th></tr>
-                    <tr><td style="width: 40%; padding-left: 0; padding-right: 5px;">${countyData["Residential Avg. Electric Bill"]}nth</td></tr>
-                    
-                </table>
-            </td>
-        </tr>
-    </table>
-      
-        
-      </div>
-    `;
-
-      return popupContent;
-    }
-
-    return () => {
-      // Clean up the GeoJSON layer when the component unmounts or the checkbox is unchecked
-      if (map && countyLayer) {
-        map.removeLayer(countyLayer);
-      }
-    };
-  }, [map, showCountyData, countyLayer]);
+  }, [map, filteredData]);
 
   return (
     <Row>
       <div style={{ display: "flex", flexDirection: "row" }}>
-        <Col xs={12} md={3} style={{ width: "20%" }}>
-          <div
-            className="desalination-filter"
-            style={{ textAlign: "left", paddingLeft: "10%" }}
-          >
-            <h4>Desalination Plants</h4>
-            <Form style={{ justifyContent: "left" }}>
-              <Form.Check
-                type="checkbox"
-                label="Planned"
-                checked={showPlanned}
-                onChange={(e) => {
-                  setShowPlanned(e.target.checked);
-                  handleDesalinationCheckboxChange(e.target.checked);
-                }}
-              />
-              <Form.Check
-                type="checkbox"
-                label="Under Construction"
-                checked={showUnderConstruction}
-                onChange={(e) => {
-                  setShowUnderConstruction(e.target.checked);
-                  handleDesalinationCheckboxChange(e.target.checked);
-                }}
-              />
-              <Form.Check
-                type="checkbox"
-                label="Operational"
-                checked={showOperational}
-                onChange={(e) => {
-                  setShowOperational(e.target.checked);
-                  handleDesalinationCheckboxChange(e.target.checked);
-                }}
-              />
-            </Form>
-          </div>
-          <div
-            className="energy-filter"
-            style={{ textAlign: "left", paddingLeft: "10%" }}
-          >
-            <h4>Energy Infrastructure</h4>
-            <Form>
-              <Form.Check
-                type="checkbox"
-                label="Energy Infrastructure"
-                checked={showEnergyInfrastructure}
-                onChange={(e) =>
-                  handleEnergyInfrastructureCheckbox(e.target.checked)
-                }
-              />
-            </Form>
-          </div>
-
-          <div
-            className="state-filter"
-            style={{ textAlign: "left", paddingLeft: "10%" }}
-          >
-            <h4>State Data</h4>
-            <Form>
-              <Form.Check
-                type="checkbox"
-                label="State Data"
-                checked={showStateData}
-                onChange={(e) => handleStateDataCheckbox(e.target.checked)}
-              />
-            </Form>
-          </div>
-
-          <div
-            className="county-filter"
-            style={{ textAlign: "left", paddingLeft: "10%" }}
-          >
-            <h4>County Data</h4>
-            <Form>
-              <Form.Check
-                type="checkbox"
-                label="County Data"
-                checked={showCountyData}
-                onChange={(e) => handleCountyDataCheckbox(e.target.checked)}
-              />
-            </Form>
-          </div>
-        </Col>
-        <Col xs={12} md={9} style={{ width: "80%" }}>
+        <Col xs={12} md={9} style={{ width: "90%" }}>
           <div className="map-container">
-            {showEnergyInfrastructure && (
-              <iframe
-                src="https://eia.maps.arcgis.com/apps/instant/interactivelegend/index.html?appid=5039a1a01ec34b6bbf0ab4fd57da5eb4"
-                frameBorder="0"
-                title="energyinfra"
-              ></iframe>
-            )}
-
-            <div
-              style={{
-                width: "100%",
-                height: "90vh",
-                display: showEnergyInfrastructure ? "none" : "block",
-              }}
-            >
-              <div id="map" style={{ width: "100%", height: "100%" }}></div>
-            </div>
+            <div id="map" style={{ width: "100%", height: "100vh" }}></div>
           </div>
         </Col>
       </div>
