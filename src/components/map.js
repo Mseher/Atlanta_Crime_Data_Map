@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Row, Col, Form } from "react-bootstrap";
+import { Row, Col} from "react-bootstrap";
 import "./map.css";
 
 const AtlantaMap = () => {
