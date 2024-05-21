@@ -124,13 +124,17 @@ const AtlantaMap = () => {
     filterControl.onAdd = function (map) {
       const div = L.DomUtil.create("div", "filter-control");
       div.innerHTML = `
-        <label for="filterSelect">Filter by Date</label>
-        <select id="filterSelect" class="form-control">
-          <option value="Today">Today</option>
-          <option value="Week">Last Week</option>
-          <option value="Month">Last Month</option>
-          <option value="3 Months">Last 3 Months</option>
-        </select>
+        <label>Filter by Date</label>
+        <div>
+          <input type="radio" id="today" name="filter" value="Today" ${filter === "Today" ? "checked" : ""}>
+          <label for="today">Today</label><br>
+          <input type="radio" id="week" name="filter" value="Week" ${filter === "Week" ? "checked" : ""}>
+          <label for="week">Last Week</label><br>
+          <input type="radio" id="month" name="filter" value="Month" ${filter === "Month" ? "checked" : ""}>
+          <label for="month">Last Month</label><br>
+          <input type="radio" id="threeMonths" name="filter" value="3 Months" ${filter === "3 Months" ? "checked" : ""}>
+          <label for="threeMonths">Last 3 Months</label>
+        </div>
       `;
       L.DomEvent.on(div, 'change', (e) => {
         setFilter(e.target.value);
