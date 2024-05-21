@@ -138,7 +138,7 @@ const AtlantaMap = () => {
       // Clean up
       mapInstance.remove();
     };
-  }, [filter]);
+  }, [filter, nibrsCodeNames]);
 
   useEffect(() => {
     if (map && filteredData.length > 0) {
