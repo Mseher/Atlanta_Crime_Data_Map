@@ -1,91 +1,72 @@
 import React, { useEffect, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Row, Col} from "react-bootstrap";
+import { Row, Col } from "react-bootstrap";
 import "./map.css";
 
 const AtlantaMap = () => {
   const [map, setMap] = useState(null);
   const [filteredData, setFilteredData] = useState([]);
   const [filter, setFilter] = useState("Today");
+
+  const nibrsCodeNames = ["Motor Vehicle Theft", "Theft From Motor Vehicle", "Theft of Motor Vehicle Parts or Accessories"];
   const batchSize = 2000; // Adjust the batch size as needed
-
-  useEffect(() => {
-    const fetchTotalCount = async () => {
-      try {
-        const response = await fetch(
-          "https://services3.arcgis.com/Et5Qfajgiyosiw4d/arcgis/rest/services/CrimeDataExport_2_view/FeatureServer/1/query?where=1+%3D+1&returnCountOnly=true&f=json"
-        );
-        const data = await response.json();
-        return data.count;
-      } catch (error) {
-        console.error("Error fetching total count:", error);
-        return 0;
-      }
-    };
-
-    const fetchCrimeDataBatch = async (offset) => {
-      try {
-        const response = await fetch(
-          `https://services3.arcgis.com/Et5Qfajgiyosiw4d/arcgis/rest/services/CrimeDataExport_2_view/FeatureServer/1/query?where=1+%3D+1&outFields=*&returnGeometry=true&orderByFields=OBJECTID&resultOffset=${offset}&resultRecordCount=${batchSize}&f=pgeojson`
-        );
-        const data = await response.json();
-        return data.features;
-      } catch (error) {
-        console.error("Error fetching crime data batch:", error);
-        return [];
-      }
-    };
-
-    const fetchCrimeData = async () => {
-      try {
-        const totalCount = await fetchTotalCount();
-        let allFeatures = [];
-        for (let offset = 0; offset < totalCount; offset += batchSize) {
-          const features = await fetchCrimeDataBatch(offset);
-          allFeatures = [...allFeatures, ...features];
-        }
-        const relevantFeatures = allFeatures.filter((feature) =>
-          ["Motor Vehicle Theft", "Theft From Motor Vehicle", "Theft of Motor Vehicle Parts or Accessories"].includes(
-            feature.properties.nibrs_code_name
-          )
-        );
-        applyFilter(relevantFeatures, filter);
-      } catch (error) {
-        console.error("Error fetching crime data:", error);
-      }
-    };
-
-    fetchCrimeData();
-  }, [filter]);
-
-  const applyFilter = (data, filter) => {
+  
+  const getTimeRange = (filter) => {
     const now = new Date();
     let startTime;
-
     switch (filter) {
       case "Today":
-        startTime = new Date(now.setHours(0, 0, 0, 0)).getTime();
+        startTime = new Date(now.setHours(0, 0, 0, 0)).toISOString();
         break;
       case "Week":
-        startTime = new Date(now.setDate(now.getDate() - 7)).getTime();
+        startTime = new Date(now.setDate(now.getDate() - 7)).toISOString();
         break;
       case "Month":
-        startTime = new Date(now.setDate(now.getDate() - 30)).getTime();
+        startTime = new Date(now.setDate(now.getDate() - 30)).toISOString();
         break;
       case "3 Months":
-        startTime = new Date(now.setDate(now.getDate() - 90)).getTime();
+        startTime = new Date(now.setDate(now.getDate() - 90)).toISOString();
         break;
       default:
-        startTime = new Date(now.setHours(0, 0, 0, 0)).getTime();
+        startTime = new Date(now.setHours(0, 0, 0, 0)).toISOString();
     }
-
-    const filteredFeatures = data.filter((feature) => {
-      const reportDate = feature.properties.report_Date;
-      return reportDate >= startTime && reportDate <= Date.now();
-    });
-    setFilteredData(filteredFeatures);
+    return startTime;
   };
+
+  useEffect(() => {
+    const fetchCrimeData = async (filter) => {
+      const startTime = getTimeRange(filter);
+      const endTime = new Date().toISOString();
+      
+      const whereClause = nibrsCodeNames.map(codeName => `nibrs_code_name='${codeName}'`).join(' OR ');
+
+      let allFeatures = [];
+      let offset = 0;
+      let hasMoreData = true;
+
+      while (hasMoreData) {
+        try {
+          const response = await fetch(
+            `https://services3.arcgis.com/Et5Qfajgiyosiw4d/arcgis/rest/services/CrimeDataExport_2_view/FeatureServer/1/query?where=(${whereClause}) AND report_Date >= '${startTime}' AND report_Date <= '${endTime}'&outFields=*&returnGeometry=true&orderByFields=OBJECTID&resultOffset=${offset}&resultRecordCount=${batchSize}&f=pgeojson`
+          );
+          const data = await response.json();
+          if (data.features && data.features.length > 0) {
+            allFeatures = [...allFeatures, ...data.features];
+            offset += batchSize;
+          } else {
+            hasMoreData = false;
+          }
+        } catch (error) {
+          console.error("Error fetching crime data:", error);
+          hasMoreData = false;
+        }
+      }
+      setFilteredData(allFeatures);
+    };
+
+    fetchCrimeData(filter);
+  }, [filter]);
 
   useEffect(() => {
     const mapInstance = L.map("map").setView([33.7490, -84.3880], 12); // Centering the map on Atlanta with a zoom level of 12
@@ -124,17 +105,24 @@ const AtlantaMap = () => {
     filterControl.onAdd = function (map) {
       const div = L.DomUtil.create("div", "filter-control");
       div.innerHTML = `
-        <label>Filter by Date</label>
-        <div>
-          <input type="radio" id="today" name="filter" value="Today" ${filter === "Today" ? "checked" : ""}>
-          <label for="today">Today</label><br>
-          <input type="radio" id="week" name="filter" value="Week" ${filter === "Week" ? "checked" : ""}>
-          <label for="week">Last Week</label><br>
-          <input type="radio" id="month" name="filter" value="Month" ${filter === "Month" ? "checked" : ""}>
-          <label for="month">Last Month</label><br>
-          <input type="radio" id="threeMonths" name="filter" value="3 Months" ${filter === "3 Months" ? "checked" : ""}>
-          <label for="threeMonths">Last 3 Months</label>
-        </div>
+        <form>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="filter" id="filterToday" value="Today" ${filter === "Today" ? "checked" : ""}>
+            <label class="form-check-label" for="filterToday">Today</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="filter" id="filterWeek" value="Week" ${filter === "Week" ? "checked" : ""}>
+            <label class="form-check-label" for="filterWeek">Last Week</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="filter" id="filterMonth" value="Month" ${filter === "Month" ? "checked" : ""}>
+            <label class="form-check-label" for="filterMonth">Last Month</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="filter" id="filter3Months" value="3 Months" ${filter === "3 Months" ? "checked" : ""}>
+            <label class="form-check-label" for="filter3Months">Last 3 Months</label>
+          </div>
+        </form>
       `;
       L.DomEvent.on(div, 'change', (e) => {
         setFilter(e.target.value);
