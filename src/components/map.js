@@ -6,7 +6,6 @@ import "./map.css";
 
 const AtlantaMap = () => {
   const [map, setMap] = useState(null);
-  const [crimeData, setCrimeData] = useState({ features: [] });
   const [filteredData, setFilteredData] = useState([]);
   const [filter, setFilter] = useState("Today");
   const batchSize = 2000; // Adjust the batch size as needed
