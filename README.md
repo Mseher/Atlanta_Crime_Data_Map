@@ -123,9 +123,4 @@ Contributions are welcome! Please open an issue or submit a pull request for any
 - [Atlanta Police Department Open Data](https://opendata.atlantapd.org)
 - [CartoDB](https://carto.com/)
 
----
 
-Feel free to modify this README file to suit your project's needs. Happy coding!
-```
-
-This README file provides comprehensive information about your project, including setup instructions, data source details, and project structure. Make sure to update any placeholders (like `your-username` and `your-live-demo-link`) with your actual GitHub username and the link to your live demo, if applicable.
